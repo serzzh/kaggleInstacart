@@ -159,11 +159,18 @@ rm(prd, users)
 gc()
 
 #remove features
-#rem_feat = c('')
-#data <- data[-rem_feat]
-
+data <- readRDS(file.path(path, "data.RDS"))
+rem_feat = c( 'user_order_recency', 
+             'prod_mean_add_to_cart_order', 
+             'prod_days_since_prior',
+             'user_product_diversity',
+             'prod_penetration',
+             'prod_double_penetration',
+             'weekly_orders')
+data <- data[!colnames(data) %in% rem_feat]
 
 # Train / Test datasets ---------------------------------------------------
+
 train <- as.data.frame(data[data$eval_set == "train",])
 train$eval_set <- NULL
 train$user_id <- NULL
@@ -176,8 +183,8 @@ test$eval_set <- NULL
 test$user_id <- NULL
 test$reordered <- NULL
 
-saveRDS(data,file.path(path, "data.RDS"))
-#data <- readRDS(file.path(path, "data.RDS"))
+#saveRDS(data,file.path(path, "data.RDS"))
+
 rm(data)
 gc()
 
@@ -202,7 +209,7 @@ params <- list(
 )
 
 
-## 75% of the sample size
+## 20% of the sample size
 smp_size <- floor(0.2 * nrow(train))
 
 ## set the seed to make your partition reproductible
@@ -210,8 +217,8 @@ set.seed(123)
 train_ind <- sample(seq_len(nrow(train)), size = smp_size)
 
 subtrain <- train[train_ind,]
-valid <- train[-train_ind,]
-rm(train)
+valid <- train[-train_ind,] %>% sample_frac(0.1)
+#rm(train)
 
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered)), label = subtrain$reordered)
 model <- xgboost(data = X, params = params, nrounds = 90)
@@ -219,16 +226,16 @@ model <- xgboost(data = X, params = params, nrounds = 90)
 importance <- xgb.importance(colnames(X), model = model)
 
 xgb.ggplot.importance(importance)
-
 rm(X, importance, subtrain)
 gc()
 
 # Validate model -------------------------------------------------------------
 V <- xgb.DMatrix(as.matrix(valid %>% select(-reordered)))
 
-
-
-print F1_Score(predict(model, V), subtrain$reordered positive = NULL)
+pred <- (predict(model, V) > 0.5) * 1
+print (F1_Score(pred , valid$reordered, positive = NULL))
+#print (F1_Score(pred , valid$reordered, positive = NULL))
+rm(V,valid)
 
 # Apply model -------------------------------------------------------------
 X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
