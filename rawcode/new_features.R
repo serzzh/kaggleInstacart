@@ -54,9 +54,9 @@ prd <- orders_products %>%
     prod_orders = n(),
     prod_reorders = sum(reordered),
     prod_first_orders = sum(product_time == 1),
-    prod_second_orders = sum(product_time == 2)
-    #prod_mean_add_to_cart_order = mean(add_to_cart_order),
-    #prod_days_since_prior = mean(days_since_prior_order, na.rm = T)
+    prod_second_orders = sum(product_time == 2),
+    prod_mean_add_to_cart_order = mean(add_to_cart_order),
+    prod_days_since_prior = mean(days_since_prior_order, na.rm = T)
   )
 
 prd$prod_reorder_probability <- prd$prod_second_orders / prd$prod_first_orders
@@ -102,7 +102,7 @@ us <- orders_products %>%
 
 users <- users %>% inner_join(us)
 users$user_average_basket <- users$user_total_products / users$user_orders
-#users$user_product_diversity <- users$user_distinct_products / users$user_orders
+users$user_product_diversity <- users$user_distinct_products / users$user_orders
 
 
 us <- orders %>%
@@ -112,7 +112,7 @@ us <- orders %>%
 
 users <- users %>% inner_join(us)
 
-#users$user_order_recency <- users$time_since_last_order / users$user_mean_days_since_prior
+users$user_order_recency <- users$time_since_last_order / users$user_mean_days_since_prior
 
 rm(us)
 gc()
@@ -150,15 +150,17 @@ data$up_order_rate <- data$up_orders / data$user_orders
 data$up_orders_since_last_order <- data$user_orders - data$up_last_order
 data$up_order_rate_since_first_order <- data$up_orders / (data$user_orders - data$up_first_order + 1)
 
-data <- data %>% 
-  left_join(ordert %>% select(user_id, product_id, reordered), 
+data <- data %>%
+  left_join(ordert %>% select(user_id, product_id, reordered),
             by = c("user_id", "product_id"))
+rm(ordert)
 
-rm(ordert, prd, users)
+rm(prd, users)
 gc()
 
 #remove features
-rem_feat = c('')
+#rem_feat = c('')
+#data <- data[-rem_feat]
 
 
 # Train / Test datasets ---------------------------------------------------
@@ -194,7 +196,7 @@ params <- list(
   "lambda"              = 10
 )
 
-subtrain <- train %>% sample_frac(0.1)
+subtrain <- train %>% sample_frac(0.2)
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered)), label = subtrain$reordered)
 model <- xgboost(data = X, params = params, nrounds = 90)
 
