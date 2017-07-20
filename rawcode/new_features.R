@@ -176,12 +176,17 @@ test$eval_set <- NULL
 test$user_id <- NULL
 test$reordered <- NULL
 
+saveRDS(data,file.path(path, "data.RDS"))
+#data <- readRDS(file.path(path, "data.RDS"))
 rm(data)
 gc()
 
 
 # Model -------------------------------------------------------------------
+
 library(xgboost)
+require(Ckmeans.1d.dp)
+require(MLmetrics)
 
 params <- list(
   "objective"           = "reg:logistic",
@@ -196,16 +201,34 @@ params <- list(
   "lambda"              = 10
 )
 
-subtrain <- train %>% sample_frac(0.2)
+
+## 75% of the sample size
+smp_size <- floor(0.2 * nrow(train))
+
+## set the seed to make your partition reproductible
+set.seed(123)
+train_ind <- sample(seq_len(nrow(train)), size = smp_size)
+
+subtrain <- train[train_ind,]
+valid <- train[-train_ind,]
+rm(train)
+
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered)), label = subtrain$reordered)
 model <- xgboost(data = X, params = params, nrounds = 90)
 
 importance <- xgb.importance(colnames(X), model = model)
+
 xgb.ggplot.importance(importance)
 
 rm(X, importance, subtrain)
 gc()
 
+# Validate model -------------------------------------------------------------
+V <- xgb.DMatrix(as.matrix(valid %>% select(-reordered)))
+
+
+
+print F1_Score(predict(model, V), subtrain$reordered positive = NULL)
 
 # Apply model -------------------------------------------------------------
 X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
