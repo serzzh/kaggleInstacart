@@ -55,6 +55,8 @@ prd <- orders_products %>%
     prod_reorders = sum(reordered),
     prod_first_orders = sum(product_time == 1),
     prod_second_orders = sum(product_time == 2)
+    #prod_mean_add_to_cart_order = mean(add_to_cart_order),
+    #prod_days_since_prior = mean(days_since_prior_order, na.rm = T)
   )
 
 prd$prod_reorder_probability <- prd$prod_second_orders / prd$prod_first_orders
@@ -100,7 +102,7 @@ us <- orders_products %>%
 
 users <- users %>% inner_join(us)
 users$user_average_basket <- users$user_total_products / users$user_orders
-
+#users$user_product_diversity <- users$user_distinct_products / users$user_orders
 
 
 us <- orders %>%
@@ -110,8 +112,11 @@ us <- orders %>%
 
 users <- users %>% inner_join(us)
 
+#users$user_order_recency <- users$time_since_last_order / users$user_mean_days_since_prior
+
 rm(us)
 gc()
+
 
 
 # Database ----------------------------------------------------------------
@@ -123,6 +128,18 @@ data <- orders_products %>%
     up_last_order = max(order_number),
     up_average_cart_position = mean(add_to_cart_order))
 
+
+
+# Preffered DoW, HoD ----------------------------------------------------------------
+
+# dt1=setDT(orders_products)[, .N, by=.(user_id, product_id, order_dow)][, order_dow[which.max(N)],by=.(user_id, product_id)]
+# names(dt1)[names(dt1) == "V1"] = "user_preferred_dow"
+# 
+# dt2=setDT(orders_products)[, .N, by=.(user_id, product_id, order_hour_of_day)][, order_hour_of_day[which.max(N)],by=.(user_id, product_id)]
+# names(dt2)[names(dt2) == "V1"] = "user_preferred_hod"
+# 
+# data <- data %>% inner_join(dt1, by = c("user_id", "product_id")) %>% inner_join(dt2, by = c("user_id", "product_id"))
+#rm(dt1, dt2)
 rm(orders_products, orders)
 
 data <- data %>% 
@@ -139,6 +156,9 @@ data <- data %>%
 
 rm(ordert, prd, users)
 gc()
+
+#remove features
+rem_feat = c('')
 
 
 # Train / Test datasets ---------------------------------------------------
