@@ -158,24 +158,22 @@ rm(ordert)
 rm(prd, users)
 gc()
 
-#remove features
-data <- readRDS(file.path(path, "data.RDS"))
-rem_feat = c( 'user_order_recency', 
-             'prod_mean_add_to_cart_order', 
-             'prod_days_since_prior',
-             'user_product_diversity',
-             'prod_penetration',
-             'prod_double_penetration',
-             'weekly_orders')
-data <- data[!colnames(data) %in% rem_feat]
+# Feature tuning - remove features to study influence
+# data <- readRDS(file.path(path, "data.RDS"))
+# rem_feat = c( 'user_order_recency', 
+#              'prod_mean_add_to_cart_order', 
+#              'prod_days_since_prior',
+#              'user_product_diversity',
+#              'prod_penetration',
+#              'prod_double_penetration',
+#              'weekly_orders')
+# data <- data[!colnames(data) %in% rem_feat]
 
 # Train / Test datasets ---------------------------------------------------
 
 train <- as.data.frame(data[data$eval_set == "train",])
 train$eval_set <- NULL
 train$user_id <- NULL
-train$product_id <- NULL
-train$order_id <- NULL
 train$reordered[is.na(train$reordered)] <- 0
 
 test <- as.data.frame(data[data$eval_set == "test",])
@@ -218,9 +216,9 @@ train_ind <- sample(seq_len(nrow(train)), size = smp_size)
 
 subtrain <- train[train_ind,]
 valid <- train[-train_ind,] %>% sample_frac(0.1)
-#rm(train)
+rm(train)
 
-X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered)), label = subtrain$reordered)
+X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id)), label = subtrain$reordered)
 model <- xgboost(data = X, params = params, nrounds = 90)
 
 importance <- xgb.importance(colnames(X), model = model)
@@ -229,12 +227,49 @@ xgb.ggplot.importance(importance)
 rm(X, importance, subtrain)
 gc()
 
-# Validate model -------------------------------------------------------------
-V <- xgb.DMatrix(as.matrix(valid %>% select(-reordered)))
+V <- xgb.DMatrix(as.matrix(valid %>% select(-reordered, - order_id, -product_id)))
 
-pred <- (predict(model, V) > 0.5) * 1
-print (F1_Score(pred , valid$reordered, positive = NULL))
-#print (F1_Score(pred , valid$reordered, positive = NULL))
+valid$pred <- (predict(model, V) > 0.22) * 1
+
+# Validation script here -------------------------------------------------------------
+# Formatting data to output shape
+
+pred <- valid %>%
+        filter(pred == 1) %>%
+        group_by(order_id) %>%
+        summarise(
+                pred = paste(product_id, collapse = " ")
+        )
+
+gt <- valid %>%
+        filter(reordered == 1) %>%
+        group_by(order_id) %>%
+        summarise(
+                gt = paste(product_id, collapse = " ")
+        )
+
+df <- merge(x = pred, y = gt, by = "order_id", all = TRUE)
+rm(pred, gt)
+
+# Compute F1 for order_id 
+my_f1 <- function(pred, gt){
+        #compute missing ID and precision
+        precision <- length(which(gt %in% pred))/length(gt);
+        #compute not ordered (excess) ID and recall
+        recall <- length(which(pred %in% gt))/length(pred);
+        return(2*precision*recall/(precision+recall)) 
+}
+
+# Apply function to each order_id and compute mean
+
+#print(pred)
+df$pred <- sapply(df$pred, function(x) as.list(strsplit(x, " ")[[1]]))
+df$gt <- sapply(df$gt, function(x) as.list(strsplit(x, " ")[[1]]))
+
+
+#df$precision <- sapply(df$pred, function(x,y) x %in% y, y=df$gt)
+#f1 <- sapply(df$pred, function(x,y) my_f1(x,y), y=df$gt)
+
 rm(V,valid)
 
 # Apply model -------------------------------------------------------------
