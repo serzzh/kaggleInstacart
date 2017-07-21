@@ -159,7 +159,7 @@ rm(prd, users)
 gc()
 
 # Feature tuning - remove features to study influence
-# data <- readRDS(file.path(path, "data.RDS"))
+data <- readRDS(file.path(path, "data.RDS"))
 # rem_feat = c( 'user_order_recency', 
 #              'prod_mean_add_to_cart_order', 
 #              'prod_days_since_prior',
@@ -220,6 +220,7 @@ rm(train)
 
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id)), label = subtrain$reordered)
 model <- xgboost(data = X, params = params, nrounds = 90)
+#model <- xgb.load('xgboost.model')
 
 importance <- xgb.importance(colnames(X), model = model)
 
@@ -238,37 +239,38 @@ pred <- valid %>%
         filter(pred == 1) %>%
         group_by(order_id) %>%
         summarise(
-                pred = paste(product_id, collapse = " ")
+                pred = paste(product_id, collapse = " "),
+                n_pred = n()
         )
 
 gt <- valid %>%
         filter(reordered == 1) %>%
         group_by(order_id) %>%
         summarise(
-                gt = paste(product_id, collapse = " ")
+                gt = paste(product_id, collapse = " "),
+                n_gt = n()
+        )
+
+intsec <- valid %>%
+        filter(pred == 1 & reordered == 1) %>%
+        group_by(order_id) %>%
+        summarise(
+                intsec = paste(product_id, collapse = " "),
+                n_int = n()
         )
 
 df <- merge(x = pred, y = gt, by = "order_id", all = TRUE)
-rm(pred, gt)
+df <- merge(x = df, y = intsec, by = "order_id", all = TRUE)
+rm(pred, gt, intsec)
 
-# Compute F1 for order_id 
-my_f1 <- function(pred, gt){
-        #compute missing ID and precision
-        precision <- length(which(gt %in% pred))/length(gt);
-        #compute not ordered (excess) ID and recall
-        recall <- length(which(pred %in% gt))/length(pred);
-        return(2*precision*recall/(precision+recall)) 
-}
-
-# Apply function to each order_id and compute mean
-
-#print(pred)
-df$pred <- sapply(df$pred, function(x) as.list(strsplit(x, " ")[[1]]))
-df$gt <- sapply(df$gt, function(x) as.list(strsplit(x, " ")[[1]]))
-
-
-#df$precision <- sapply(df$pred, function(x,y) x %in% y, y=df$gt)
-#f1 <- sapply(df$pred, function(x,y) my_f1(x,y), y=df$gt)
+# Compute F1
+df[is.na(df)] <- 0
+precision <- sum(df$n_int) / sum(df$n_gt)
+recall <- sum(df$n_int) / sum(df$n_pred)
+f1 <- 2*precision*recall/(precision+recall)
+print(precision)
+print(recall)
+print(f1)
 
 rm(V,valid)
 
@@ -276,7 +278,7 @@ rm(V,valid)
 X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
 test$reordered <- predict(model, X)
 
-test$reordered <- (test$reordered > 0.21) * 1
+test$reordered <- (test$reordered > 0.22) * 1
 
 submission <- test %>%
   filter(reordered == 1) %>%
