@@ -23,6 +23,7 @@ ordert <- fread(file.path(path, "order_products__train.csv"))
 orders <- fread(file.path(path, "orders.csv"))
 products <- fread(file.path(path, "products.csv"))
 
+# Counting data-----------------------------------------------------------
 # train_users <- data.table(user_id = orders[orders$eval_set=='train']$user_id)
 # test_users <- data.table(user_id = orders[orders$eval_set=='test']$user_id)
 # train_users_orders <- merge(orders, train_users, by='user_id')
@@ -39,6 +40,22 @@ products <- fread(file.path(path, "products.csv"))
 #             train2_users_positions[,c('user_id', 'product_id')],
 #             by=c('user_id', 'product_id'))
 # dim(df %>% group_by(user_id, product_id) %>% summarise())
+
+
+
+#handle None function
+
+add_none <- function(df){
+  ids <- df %>% group_by(order_id) %>% summarise(reord_count=sum(reordered))
+  add <- data.table(order_id = ids[ids$reord_count == 0,]$order_id)
+  add <- cbind(add, product_id = rep("None",nrow(add)))
+  add <- cbind(add, add_to_cart_order = rep(1,nrow(add)))
+  add <- cbind(add, reordered = rep(1,nrow(add)))
+  return(rbind(add,df))
+}
+
+orderp <- add_none(orderp)
+ordert <- add_none(ordert)
 
 # Reshape data ------------------------------------------------------------
 aisles$aisle <- as.factor(aisles$aisle)
@@ -173,6 +190,8 @@ rm(ordert)
 
 rm(prd, users)
 gc()
+#saveRDS(data,file.path(path, "data.RDS"))
+
 
 # Feature tuning - remove features to study influence
 data <- readRDS(file.path(path, "data.RDS"))
@@ -198,7 +217,7 @@ test$eval_set <- NULL
 test$user_id <- NULL
 test$reordered <- NULL
 
-#saveRDS(data,file.path(path, "data.RDS"))
+
 
 rm(data)
 gc()
@@ -225,14 +244,14 @@ params <- list(
 
 
 ## 20% of the sample size
-smp_size <- floor(0.4 * nrow(train))
+smp_size <- floor(0.2 * nrow(train))
 
 ## set the seed to make your partition reproductible
 set.seed(123)
 train_ind <- sample(seq_len(nrow(train)), size = smp_size)
 
 subtrain <- train[train_ind,]
-valid <- train[-train_ind,] %>% sample_frac(0.5)
+valid <- train[-train_ind,] %>% sample_frac(0.3)
 rm(train)
 
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id)), label = subtrain$reordered)
