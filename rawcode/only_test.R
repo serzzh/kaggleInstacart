@@ -176,6 +176,7 @@ gc()
 
 # Feature tuning - remove features to study influence
 data <- readRDS(file.path(path, "data.RDS"))
+#feat <- read.csv(file.path(path, "features.csv"))
 # rem_feat = c( 'user_order_recency', 
 #              'prod_mean_add_to_cart_order', 
 #              'prod_days_since_prior',
@@ -183,7 +184,7 @@ data <- readRDS(file.path(path, "data.RDS"))
 #              'prod_penetration',
 #              'prod_double_penetration',
 #              'weekly_orders')
-# data <- data[!colnames(data) %in% rem_feat]
+#data <- data[!colnames(data) %in% feat[10:27]]
 
 # Train / Test datasets ---------------------------------------------------
 
@@ -224,14 +225,14 @@ params <- list(
 
 
 ## 20% of the sample size
-smp_size <- floor(0.2 * nrow(train))
+smp_size <- floor(0.4 * nrow(train))
 
 ## set the seed to make your partition reproductible
 set.seed(123)
 train_ind <- sample(seq_len(nrow(train)), size = smp_size)
 
 subtrain <- train[train_ind,]
-valid <- train[-train_ind,] %>% sample_frac(0.1)
+valid <- train[-train_ind,] %>% sample_frac(0.5)
 rm(train)
 
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id)), label = subtrain$reordered)
@@ -240,61 +241,60 @@ model <- xgboost(data = X, params = params, nrounds = 90)
 
 importance <- xgb.importance(colnames(X), model = model)
 
+feat<-importance$Feature
+
 xgb.ggplot.importance(importance)
 rm(X, importance, subtrain)
 gc()
 
-V <- xgb.DMatrix(as.matrix(valid %>% select(-reordered, - order_id, -product_id)))
 
-valid$pred <- (predict(model, V) > 0.22) * 1
+my_validation <- function (model, valid, threshold){
+        
+        V <- xgb.DMatrix(as.matrix(valid %>% select(-reordered, - order_id, -product_id)))
+        valid$pred <- (predict(model, V) > threshold) * 1
+        pred <- valid %>%
+                filter(pred == 1) %>%
+                group_by(order_id) %>%
+                summarise(
+                        pred = paste(product_id, collapse = " "),
+                        n_pred = n()
+                )
+        gt <- valid %>%
+                filter(reordered == 1) %>%
+                group_by(order_id) %>%
+                summarise(
+                        gt = paste(product_id, collapse = " "),
+                        n_gt = n()
+                )
+        intsec <- valid %>%
+                filter(pred == 1 & reordered == 1) %>%
+                group_by(order_id) %>%
+                summarise(
+                        intsec = paste(product_id, collapse = " "),
+                        n_int = n()
+                )
+        
+        df <- merge(x = pred, y = gt, by = "order_id", all = TRUE)
+        df <- merge(x = df, y = intsec, by = "order_id", all = TRUE)
+        rm(pred, gt, intsec)
+        
+        # Compute F1
+        df[is.na(df)] <- 0
+        precision <- sum(df$n_int) / sum(df$n_gt)
+        recall <- sum(df$n_int) / sum(df$n_pred)
+        f1 <- 2*precision*recall/(precision+recall)
+        output <- list(precision, recall, f1)
+        return(output)
+}
 
-# Validation script here -------------------------------------------------------------
-# Formatting data to output shape
-
-pred <- valid %>%
-        filter(pred == 1) %>%
-        group_by(order_id) %>%
-        summarise(
-                pred = paste(product_id, collapse = " "),
-                n_pred = n()
-        )
-
-gt <- valid %>%
-        filter(reordered == 1) %>%
-        group_by(order_id) %>%
-        summarise(
-                gt = paste(product_id, collapse = " "),
-                n_gt = n()
-        )
-
-intsec <- valid %>%
-        filter(pred == 1 & reordered == 1) %>%
-        group_by(order_id) %>%
-        summarise(
-                intsec = paste(product_id, collapse = " "),
-                n_int = n()
-        )
-
-df <- merge(x = pred, y = gt, by = "order_id", all = TRUE)
-df <- merge(x = df, y = intsec, by = "order_id", all = TRUE)
-rm(pred, gt, intsec)
-
-# Compute F1
-df[is.na(df)] <- 0
-precision <- sum(df$n_int) / sum(df$n_gt)
-recall <- sum(df$n_int) / sum(df$n_pred)
-f1 <- 2*precision*recall/(precision+recall)
-print(precision)
-print(recall)
-print(f1)
-
-rm(V,valid)
+print(my_validation(model, valid, 0.21))
+print(my_validation(model, valid, 0.19))
 
 # Apply model -------------------------------------------------------------
 X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
 test$reordered <- predict(model, X)
 
-test$reordered <- (test$reordered > 0.22) * 1
+test$reordered <- (test$reordered > 0.19) * 1
 
 submission <- test %>%
   filter(reordered == 1) %>%
