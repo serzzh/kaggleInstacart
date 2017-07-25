@@ -281,8 +281,8 @@ rm(pred, gt, intsec)
 
 # Compute F1
 df[is.na(df)] <- 0
-precision <- sum(df$n_int) / sum(df$n_gt)
-recall <- sum(df$n_int) / sum(df$n_pred)
+precision <- sum(df$n_int) / sum(df$n_pred)
+recall <- sum(df$n_int) / sum(df$n_gt)
 f1 <- 2*precision*recall/(precision+recall)
 print(precision)
 print(recall)
