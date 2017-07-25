@@ -255,12 +255,12 @@ valid <- train[-train_ind,] %>% sample_frac(0.3)
 rm(train)
 
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id)), label = subtrain$reordered)
-#model <- xgboost(data = X, params = params, nrounds = 90)
+model <- xgboost(data = X, params = params, nrounds = 90)
 #model <- xgb.load('xgboost.model')
 
 importance <- xgb.importance(colnames(X), model = model)
 
-feat<-importance$Feature
+#feat<-importance$Feature
 
 xgb.ggplot.importance(importance)
 rm(X, importance, subtrain)
