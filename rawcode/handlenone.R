@@ -330,11 +330,11 @@ submission <- test %>%
   filter(reordered == 1) %>%
   group_by(order_id) %>%
   summarise(
-    products = paste(product_id, collapse = " "),
-    n_prod = n()-sum(product_id=='None')
+    products = paste(product_id, collapse = " ")
+    #n_prod = n()-sum(product_id=='None')
   )
 
-submission[submission$n_prod==0 | is.na(submission$n_prod),]$products<-'None'
+#submission[submission$n_prod==0 | is.na(submission$n_prod),]$products<-'None'
 
 missing <- data.frame(
   order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
@@ -342,6 +342,6 @@ missing <- data.frame(
 )
 
 submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
-submission$n_prod<-NULL
+#submission$n_prod<-NULL
 write.csv(submission, file = "submit.csv", row.names = F)
 
