@@ -194,7 +194,7 @@ gc()
 
 
 # Feature tuning - remove features to study influence
-data <- readRDS(file.path(path, "data.RDS"))
+#data <- readRDS(file.path(path, "data.RDS"))
 #feat <- read.csv(file.path(path, "features.csv"))
 # rem_feat = c( 'user_order_recency', 
 #              'prod_mean_add_to_cart_order', 
@@ -244,7 +244,7 @@ params <- list(
 
 
 ## 20% of the sample size
-smp_size <- floor(0.2 * nrow(train))
+smp_size <- floor(0.4 * nrow(train))
 
 ## set the seed to make your partition reproductible
 set.seed(123)
@@ -255,7 +255,7 @@ valid <- train[-train_ind,] %>% sample_frac(0.3)
 rm(train)
 
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id)), label = subtrain$reordered)
-model <- xgboost(data = X, params = params, nrounds = 90)
+#model <- xgboost(data = X, params = params, nrounds = 90)
 #model <- xgb.load('xgboost.model')
 
 importance <- xgb.importance(colnames(X), model = model)
@@ -271,31 +271,42 @@ my_validation <- function (model, valid, threshold){
         
         V <- xgb.DMatrix(as.matrix(valid %>% select(-reordered, - order_id, -product_id)))
         valid$pred <- (predict(model, V) > threshold) * 1
+        valid$percent <- predict(model, V)
+        valid$product_id[is.na(valid$product_id) | valid$product_id=='None' | valid$product_id==0] <- 'None'
+        
         pred <- valid %>%
                 filter(pred == 1) %>%
                 group_by(order_id) %>%
+                arrange(desc(percent)) %>%
                 summarise(
                         pred = paste(product_id, collapse = " "),
-                        n_pred = n()
+                        n_pred = n()*(1-sum(product_id=='None'))
                 )
+        #pred[pred$n_pred==0,]$pred<-'None'
+        
         gt <- valid %>%
                 filter(reordered == 1) %>%
                 group_by(order_id) %>%
                 summarise(
                         gt = paste(product_id, collapse = " "),
-                        n_gt = n()
+                        n_gt = n()*(1-sum(product_id=='None'))
                 )
+        #gt[gt$n_gt==0,]$gt<-'None'
+        
         intsec <- valid %>%
                 filter(pred == 1 & reordered == 1) %>%
                 group_by(order_id) %>%
                 summarise(
                         intsec = paste(product_id, collapse = " "),
-                        n_int = n()
+                        n_int = n()*(1-sum(product_id=='None'))
                 )
+        #intsec[intsec$n_int==0,]$intsec<-'None'
         
         df <- merge(x = pred, y = gt, by = "order_id", all = TRUE)
         df <- merge(x = df, y = intsec, by = "order_id", all = TRUE)
         rm(pred, gt, intsec)
+        
+        write.csv(df, 'df.csv')
         
         # Compute F1
         df[is.na(df)] <- 0
@@ -313,14 +324,17 @@ print(my_validation(model, valid, 0.19))
 X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
 test$reordered <- predict(model, X)
 
-test$reordered <- (test$reordered > 0.18) * 1
+test$reordered <- (test$reordered > 0.20) * 1
 
 submission <- test %>%
   filter(reordered == 1) %>%
   group_by(order_id) %>%
   summarise(
-    products = paste(product_id, collapse = " ")
+    products = paste(product_id, collapse = " "),
+    n_prod = n()-sum(product_id=='None')
   )
+
+submission[submission$n_prod==0 | is.na(submission$n_prod),]$products<-'None'
 
 missing <- data.frame(
   order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
@@ -328,5 +342,6 @@ missing <- data.frame(
 )
 
 submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
+submission$n_prod<-NULL
 write.csv(submission, file = "submit.csv", row.names = F)
 
