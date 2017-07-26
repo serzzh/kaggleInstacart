@@ -270,6 +270,23 @@ gc()
 
 subtrain$prob<- predict(model, X)
 
+rm(X)
+
+
+
+
+##test_block
+
+for(i in subtrain$order_id){
+        df1 <- subtrain[subtrain$order_id==i,]
+        ord_train_y <- df1 %>%
+                group_by(order_id) %>%
+                summarise(thresh = opt_thres(reordered, prob))
+        print(ord_train_y)
+}
+
+
+## summarising features
 ord_train <- subtrain %>%
         group_by(order_id, 
                  user_orders, user_period, user_mean_days_since_prior, weekly_orders, user_total_products, 
@@ -277,40 +294,51 @@ ord_train <- subtrain %>%
                  time_since_last_order, user_order_recency) %>%
         summarise_at(vars(matches("up_"), matches("prod_")), funs(mean)) 
 
-ord_train_y <- subtrain %>%
+
+
+## Calculating optimal threshold for each order - it can take a while
+
+ord_train_y <- subtrain[0:1000,] %>%
         group_by(order_id) %>%
-        summarise(
-                thresh = mean(opt_thres(reordered, prob))
-        )
+        summarise(thresh = opt_thres(reordered, prob))
 
 
-df1<-subtrain[subtrain$order_id=='3422',]
+## optimisation function for threshold
 
 opt_thres <- function(reordered,prob){
-        df <- cbind(reordered=reordered, prob=prob)
+        df <- data.table(cbind(reordered=reordered, prob=prob))
         df <- df[order(-prob),]
         df <- cbind(df, gt=rep(sum(df[,'reordered']==1), nrow(df)))
-        df <- cbind(df, int=cumsum(df[,'reordered']))
+        df <- cbind(df, intc=cumsum(df[,'reordered']))
         df <- cbind(df, pred=seq(1,nrow(df)))
-        df <- data.table(df) %>%
-                mutate(Ps=int/pred, Rc=int/gt) %>%
+        colnames(df)<-c('reordered', 'prob', 'gt','intc','pred')
+        df <- df %>%
+                mutate(Ps=intc/pred, Rc=intc/gt) %>%
                 mutate(f1=2*Ps*Rc/(Ps+Rc))
+        df[is.na(df[,'Rc']),'Rc']<-1
+        df[is.na(df[,'f1']),'f1']<-0
+        #df <- data.table(df)
+        #print(df)
+        #if(sum(df[,'f1'])>0) df <- df[order(-f1),]  
+        #x<-df[0,'f1']
         x <- df[which.max(df[,'f1']),'prob']
-        x[is.na(x)] <- 0.2
-        return (prob)
+        #x[is.na(x)] <- 0.2
+        return (x)
 }
 
-optimal_threshold(df1$reordered,df1$prob)
+
+
+##Bad bad order - 3338932
         
-# %>%
-#   ungroup() %>%
-#   filter(reordered==1) %>%
-#   summarise(
-#     threshold = min(prob)-0.01
-#   )
+ord_train <- merge(ord_train, ord_train_y)
+
+##training model2 for threshold prediction
 
 
+X <- xgb.DMatrix(as.matrix(ord_train %>% select(-thresh, -order_id)), label = ord_train$thresh)
 
+model2 <- xgboost(data = X, params = params, nrounds = 90)
+#model2 <- xgb.load('xgboost.model2')
 
 ## validation
 my_validation <- function (model, valid, threshold){
