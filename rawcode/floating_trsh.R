@@ -271,14 +271,37 @@ gc()
 subtrain$prob<- predict(model, X)
 
 ord_train <- subtrain %>%
-  group_by(order_id, 
-           user_orders, user_period, user_mean_days_since_prior,
-           weekly_orders, user_total_products, 
-           user_reorder_ratio, user_distinct_products, 
-           user_average_basket, user_product_diversity, 
-           time_since_last_order, user_order_recency) %>%
-  summarise_at(vars(matches("up_"), matches("prod_")), funs(mean)) 
+        group_by(order_id, 
+                 user_orders, user_period, user_mean_days_since_prior, weekly_orders, user_total_products, 
+                 user_reorder_ratio, user_distinct_products, user_average_basket, user_product_diversity,
+                 time_since_last_order, user_order_recency) %>%
+        summarise_at(vars(matches("up_"), matches("prod_")), funs(mean)) 
 
+ord_train_y <- subtrain %>%
+        group_by(order_id) %>%
+        summarise(
+                thresh = mean(opt_thres(reordered, prob))
+        )
+
+
+df1<-subtrain[subtrain$order_id=='3422',]
+
+opt_thres <- function(reordered,prob){
+        df <- cbind(reordered=reordered, prob=prob)
+        df <- df[order(-prob),]
+        df <- cbind(df, gt=rep(sum(df[,'reordered']==1), nrow(df)))
+        df <- cbind(df, int=cumsum(df[,'reordered']))
+        df <- cbind(df, pred=seq(1,nrow(df)))
+        df <- data.table(df) %>%
+                mutate(Ps=int/pred, Rc=int/gt) %>%
+                mutate(f1=2*Ps*Rc/(Ps+Rc))
+        x <- df[which.max(df[,'f1']),'prob']
+        x[is.na(x)] <- 0.2
+        return (prob)
+}
+
+optimal_threshold(df1$reordered,df1$prob)
+        
 # %>%
 #   ungroup() %>%
 #   filter(reordered==1) %>%
