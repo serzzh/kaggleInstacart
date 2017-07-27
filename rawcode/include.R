@@ -1,37 +1,86 @@
-calc_metrics <- function(df){
-        df <- data.table(cbind(reordered=df$reordered, prob=df$prob))
-        df <- df[order(-prob),]
-        df <- cbind(df, gt=rep(sum(df[,'reordered']==1), nrow(df)))
-        df <- cbind(df, intc=cumsum(df[,'reordered']))
-        df <- cbind(df, pred=seq(1,nrow(df)))
-        colnames(df)<-c('reordered', 'prob', 'gt','intc','pred')
+
+## Adding precision, recall, F1 to training dataset
+
+add_metrics <- function(df){
+        df <- data.table(subtrain)[order(order_id,-prob),]
         df <- df %>%
+                group_by(order_id) %>%
+                mutate(gt=sum(reordered),
+                       intc=cumsum(reordered),
+                       pred=1:n()) %>%
                 mutate(Ps=intc/pred, Rc=intc/gt) %>%
-                mutate(f1=2*Ps*Rc/(Ps+Rc))
+                mutate(f1=2*Ps*Rc/(Ps+Rc)) %>%
+                ungroup()
         df[is.na(df[,'Rc']),'Rc']<-1
         df[is.na(df[,'f1']),'f1']<-0
-        return (df)
+        return(df)
 }
-##test_block
-# for(i in subtrain$order_id){
-#         df1 <- subtrain[subtrain$order_id==i,]
-#         ord_train_y <- df1 %>%
-#                 group_by(order_id) %>%
-#                 summarise(thresh = opt_thres(reordered, prob))
-#         print(ord_train_y)
-# }
-# ## summarising features
-# ord_train <- subtrain %>%
-#         group_by(order_id, 
-#                  user_orders, user_period, user_mean_days_since_prior, weekly_orders, user_total_products, 
-#                  user_reorder_ratio, user_distinct_products, user_average_basket, user_product_diversity,
-#                  time_since_last_order, user_order_recency) %>%
-#         summarise_at(vars(matches("up_"), matches("prod_")), funs(mean)) 
-# ## Calculating optimal threshold for each order - it can take a while
-# ord_train_y <- subtrain[0:1000,] %>%
-#         group_by(order_id) %>%
-#         summarise(thresh = opt_thres(reordered, prob))
-# ## optimisation function for threshold
 
-# ##Bad bad order - 3338932
-# ord_train <- merge(ord_train, ord_train_y)
+
+## Apply threshold
+apply_threshold <- function(df){
+        df <- data.table(df)[order(order_id,-f1),]
+        df <- df %>%
+                select(order_id, product_id, prob, f1) %>%
+                group_by(order_id) %>%
+                mutate(count = row_number(),
+                       reordered = (prob>=prob[1L] | prob>=0.2)*1) %>%
+                ungroup()
+        return(df)
+}
+
+
+## Reshape to output format
+
+        
+        
+## Validation of both models
+my_validation <- function (model, valid, model2){
+        
+        V <- xgb.DMatrix(as.matrix(valid %>% select(-reordered, - order_id, -product_id)))
+        valid$pred <- (predict(model, V) > threshold) * 1
+        valid$percent <- predict(model, V)
+        valid$product_id[is.na(valid$product_id) | valid$product_id=='None' | valid$product_id==0] <- 'None'
+        
+        pred <- valid %>%
+                filter(pred == 1) %>%
+                group_by(order_id) %>%
+                arrange(desc(percent)) %>%
+                summarise(
+                        pred = paste(product_id, collapse = " "),
+                        n_pred = n()*(1-sum(product_id=='None'))
+                )
+        #pred[pred$n_pred==0,]$pred<-'None'
+        
+        gt <- valid %>%
+                filter(reordered == 1) %>%
+                group_by(order_id) %>%
+                summarise(
+                        gt = paste(product_id, collapse = " "),
+                        n_gt = n()*(1-sum(product_id=='None'))
+                )
+        #gt[gt$n_gt==0,]$gt<-'None'
+        
+        intsec <- valid %>%
+                filter(pred == 1 & reordered == 1) %>%
+                group_by(order_id) %>%
+                summarise(
+                        intsec = paste(product_id, collapse = " "),
+                        n_int = n()*(1-sum(product_id=='None'))
+                )
+        #intsec[intsec$n_int==0,]$intsec<-'None'
+        
+        df <- merge(x = pred, y = gt, by = "order_id", all = TRUE)
+        df <- merge(x = df, y = intsec, by = "order_id", all = TRUE)
+        rm(pred, gt, intsec)
+        
+        write.csv(df, 'df.csv')
+        
+        # Compute F1
+        df[is.na(df)] <- 0
+        precision <- sum(df$n_int) / sum(df$n_pred)
+        recall <- sum(df$n_int) / sum(df$n_gt)
+        f1 <- 2*precision*recall/(precision+recall)
+        output <- list(precision, recall, f1)
+        return(output)
+}
