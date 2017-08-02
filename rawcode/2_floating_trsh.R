@@ -75,8 +75,8 @@ valid <- train[-train_ind,] %>% sample_frac(0.3)
 rm(train)
 
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id)), label = subtrain$reordered)
-#model <- xgboost(data = X, params = params, nrounds = 90)
-model <- xgb.load('xgboost.model')
+model <- xgboost(data = X, params = params, nrounds = 90)
+#model <- xgb.load('xgboost.model')
 
 importance <- xgb.importance(colnames(X), model = model)
 
@@ -95,19 +95,7 @@ rm(X)
 source('include.R')
 
 ## adding metrics to training dataset
-subtrain<-add_metrics(subtrain)
-
-#print (tail(subtrain[,c('order_id','reordered','prob','gt','intc','pred','Ps','Rc','f1')], 40), n=40)
-#saveRDS(subtrain,file.path(path, "metrics.RDS"))
-#subtrain<-readRDS(file.path(path, "metrics.RDS"))
-
-
-## training model2 for threshold prediction 
-X <- xgb.DMatrix(as.matrix(
-        subtrain %>% select(-product_id, -order_id, -reordered, -gt, -intc, -pred, -Ps, -Rc, -f1)), label = subtrain$f1)
-model2 <- xgboost(data = X, params = params, nrounds = 90)
-#model2 <- xgb.load('xgboost.model2')
-
+##subtrain<-add_metrics(subtrain)
 
 # Validation
 print(my_validation(model, valid, model2))
@@ -116,18 +104,15 @@ source('include.R')
 # Apply models -------------------------------------------------------------
 X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
 test$prob <- predict(model, X)
-X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
-test$f1 <- predict(model2, X)
-
 
 # Apply threshold
 
-test <- apply_threshold(test)
+result <- apply_threshold(test)
 
 #print(test, n=200)
 #test$reordered <- (test$reordered > 0.20) * 1
 
-submission <- test %>%
+submission <- result %>%
   filter(reordered == 1) %>%
   group_by(order_id) %>%
   summarise(
@@ -137,13 +122,13 @@ submission <- test %>%
 
 #submission[submission$n_prod==0 | is.na(submission$n_prod),]$products<-'None'
 
-# missing <- data.frame(
-#   order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
-#   products = "None"
-# )
-# 
-# submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
-#submission$n_prod<-NULL
+missing <- data.frame(
+  order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
+  products = "None"
+)
+
+submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
+submission$n_prod<-NULL
 submission[submission$products=='' | is.na(submission$products),]<-'None'
 write.csv(submission, file = "submit.csv", row.names = F)
 

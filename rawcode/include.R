@@ -1,6 +1,11 @@
 
 ## Adding precision, recall, F1 to training dataset
 
+library(data.table)
+library(dplyr)
+library(tidyr)
+library(rPython)
+
 add_metrics <- function(df){
         df <- data.table(subtrain)[order(order_id,-prob),]
         df <- df %>%
@@ -16,15 +21,20 @@ add_metrics <- function(df){
         return(df)
 }
 
-
+##df<-test[test$order_id=='329954',]
 ## Apply threshold
 apply_threshold <- function(df){
-        df <- data.table(df)[order(order_id,-f1),]
+        df <- data.table(df)[order(order_id,-prob),]
+        max_ns <- df %>%
+                select(order_id,prob) %>%
+                group_by(order_id) %>%
+                summarise(max_n = unlist(max_expectations(prob)[1]))
         df <- df %>%
-                select(order_id, product_id, prob, f1) %>%
+                inner_join(max_ns, by='order_id') %>%
+                select(order_id, product_id, prob, max_n) %>%
                 group_by(order_id) %>%
                 mutate(count = row_number(),
-                       reordered = (prob>=prob[1L] | prob>=0.2)*1) %>%
+                       reordered = (count<=max_n)*1) %>%
                 ungroup()
         return(df)
 }
@@ -50,7 +60,7 @@ my_validation <- function (model, valid, model2){
                         pred = paste(product_id, collapse = " "),
                         n_pred = n()*(1-sum(product_id=='None'))
                 )
-        #pred[pred$n_pred==0,]$pred<-'None'
+
         
         gt <- valid %>%
                 filter(reordered == 1) %>%
@@ -59,7 +69,7 @@ my_validation <- function (model, valid, model2){
                         gt = paste(product_id, collapse = " "),
                         n_gt = n()*(1-sum(product_id=='None'))
                 )
-        #gt[gt$n_gt==0,]$gt<-'None'
+
         
         intsec <- valid %>%
                 filter(pred == 1 & reordered == 1) %>%
@@ -68,7 +78,7 @@ my_validation <- function (model, valid, model2){
                         intsec = paste(product_id, collapse = " "),
                         n_int = n()*(1-sum(product_id=='None'))
                 )
-        #intsec[intsec$n_int==0,]$intsec<-'None'
+
         
         df <- merge(x = pred, y = gt, by = "order_id", all = TRUE)
         df <- merge(x = df, y = intsec, by = "order_id", all = TRUE)
