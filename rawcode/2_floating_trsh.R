@@ -76,7 +76,9 @@ valid <- train[-train_ind,] %>% sample_frac(0.3)
 rm(train)
 
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id)), label = subtrain$reordered)
-model <- xgboost(data = X, params = params, nrounds = 90)
+Y <- xgb.DMatrix(as.matrix(valid %>% select(-reordered, -order_id, -product_id)), label = valid$reordered)
+watchlist <- list(train=X, test=Y)
+model <- xgboost(data = X, params = params, watchlist = watchlist, nrounds = 90)
 #model <- xgb.load('xgboost.model')
 
 importance <- xgb.importance(colnames(X), model = model)
