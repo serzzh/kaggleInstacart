@@ -40,12 +40,10 @@ apply_threshold <- function(df){
 }
 
 
-## Reshape to output format
 
         
-        
 ## Validation of both models
-my_validation <- function (model, valid, model2){
+my_validation <- function (model, valid, threshold){
         
         V <- xgb.DMatrix(as.matrix(valid %>% select(-reordered, - order_id, -product_id)))
         valid$pred <- (predict(model, V) > threshold) * 1
