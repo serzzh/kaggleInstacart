@@ -62,6 +62,7 @@ params <- list(
   "lambda"              = 10
 )
 
+source('include.R')
 
 ## 20% of the sample size
 smp_size <- floor(0.4 * nrow(train))
@@ -83,22 +84,23 @@ importance <- xgb.importance(colnames(X), model = model)
 #feat<-importance$Feature
 
 xgb.ggplot.importance(importance)
+rm(X, subtrain)
 gc()
 
 
 ## Threshold prediction-----------------------------------------------
 
 
-subtrain$prob <- predict(model, X)
-rm(X)
+#subtrain$prob <- predict(model, X)
+#rm(X)
 
-source('include.R')
+
 
 ## adding metrics to training dataset
 ##subtrain<-add_metrics(subtrain)
 
-# Validation
-print(my_validation(model, valid, model2))
+# Validation, initial (threshold=0.21, Pc=0.389, Rc=0.51, f1=0.4418)
+print(my_validation(model, valid, 0.19))
 
 source('include.R')
 # Apply models -------------------------------------------------------------

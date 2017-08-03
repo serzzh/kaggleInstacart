@@ -68,12 +68,28 @@ products <- products %>%
   select(-aisle_id, -department_id)
 rm(aisles, departments)
 
+products <- rbind(products, data.table(product_id='None', product_name='None', aisle='None',department='None'))
+
+# AisleVar = factor(products$aisle)
+# DepVar = factor(products$department) 
+# dumm = as.data.frame(model.matrix(~AisleVar + DepVar)[,-1])
+# products = cbind(products, dumm) %>% select(-aisle,-department)
+
+
 ordert$user_id <- orders$user_id[match(ordert$order_id, orders$order_id)]
 
-orders_products <- orders %>% inner_join(orderp, by = "order_id")
+products$product_id<-as.character(products$product_id)
+
+orders_products <- orders %>% 
+        inner_join(orderp, by = "order_id") 
 
 rm(orderp)
 gc()
+
+# orders_products <- orders_products %>%
+#         left_join(products, by = "product_id") 
+
+
 
 
 # Products ----------------------------------------------------------------
@@ -82,7 +98,7 @@ prd <- orders_products %>%
   group_by(user_id, product_id) %>%
   mutate(product_time = row_number()) %>%
   ungroup() %>%
-  group_by(product_id) %>%
+  group_by(product_id, aisle, department) %>%
   summarise(
     prod_orders = n(),
     prod_reorders = sum(reordered),
@@ -190,4 +206,8 @@ rm(ordert)
 
 rm(prd, users)
 gc()
+
+## One hot encoding for factors
+
+
 saveRDS(data,file.path(path, "data.RDS"))
