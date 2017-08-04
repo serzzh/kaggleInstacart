@@ -49,18 +49,6 @@ library(xgboost)
 require(Ckmeans.1d.dp)
 require(MLmetrics)
 
-params <- list(
-  "objective"           = "reg:logistic",
-  "eval_metric"         = "logloss",
-  "eta"                 = 0.1,
-  "max_depth"           = 6,
-  "min_child_weight"    = 10,
-  "gamma"               = 0.70,
-  "subsample"           = 0.77,
-  "colsample_bytree"    = 0.95,
-  "alpha"               = 2e-05,
-  "lambda"              = 10
-)
 
 source('include.R')
 
@@ -75,20 +63,39 @@ subtrain <- train[train_ind,]
 valid <- train[-train_ind,] %>% sample_frac(0.3)
 rm(train)
 
-X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id)), label = subtrain$reordered)
-Y <- xgb.DMatrix(as.matrix(valid %>% select(-reordered, -order_id, -product_id)), label = valid$reordered)
+X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id, -aisle, -department)), label = subtrain$reordered)
+Y <- xgb.DMatrix(as.matrix(valid %>% select(-reordered, -order_id, -product_id, -aisle, -department)), label = valid$reordered)
 watchlist <- list(train=X, test=Y)
-model <- xgboost(data = X, params = params, watchlist = watchlist, nrounds = 90)
+
+params <- list(
+        "objective"           = "reg:logistic",
+        "eval_metric"         = "logloss",
+        "eta"                 = 0.1,
+        "max_depth"           = 6,
+        "min_child_weight"    = 10,
+        "gamma"               = 0.70,
+        "subsample"           = 0.77,
+        "colsample_bytree"    = 0.95,
+        "alpha"               = 2e-05,
+        "lambda"              = 10,
+        "watchlist"           = watchlist
+)
+
+
+
+model <- xgboost(data = X, params = params, nrounds = 90)
 #model <- xgb.load('xgboost.model')
+xgb.save(model,'my1.model')
 
 importance <- xgb.importance(colnames(X), model = model)
 
 #feat<-importance$Feature
 
 xgb.ggplot.importance(importance)
-rm(X, subtrain)
+rm(X, Y, subtrain)
 gc()
 
+#train-logloss last 0.242960
 
 ## Threshold prediction-----------------------------------------------
 
@@ -101,12 +108,13 @@ gc()
 ## adding metrics to training dataset
 ##subtrain<-add_metrics(subtrain)
 
-# Validation, initial (threshold=0.21, Pc=0.389, Rc=0.51, f1=0.4418)
-print(my_validation(model, valid, 0.19))
+# Validation, initial (threshold=0.21, Pc=0.389, Rc=0.51, f1=0.4418), last=0.4424329
+print(my_validation(model, valid, 0.21))
 
 source('include.R')
+source('f1.R')
 # Apply models -------------------------------------------------------------
-X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id)))
+X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id, -aisle, -department)))
 test$prob <- predict(model, X)
 
 # Apply threshold

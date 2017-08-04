@@ -72,13 +72,20 @@ products <- rbind(products, data.table(product_id='None', product_name='None', a
 
 # AisleVar = factor(products$aisle)
 # DepVar = factor(products$department) 
-# dumm = as.data.frame(model.matrix(~AisleVar + DepVar)[,-1])
+# dumm = as.data.frame(model.matrix(~DepVar)[,-1])
 # products = cbind(products, dumm) %>% select(-aisle,-department)
 
 
 ordert$user_id <- orders$user_id[match(ordert$order_id, orders$order_id)]
 
 products$product_id<-as.character(products$product_id)
+
+orders <- orders %>%
+        mutate(wdays=ifelse(order_dow>=2,1,0),
+               wends=ifelse(order_dow<=1,1,0),
+               night=ifelse((order_hour_of_day>=20 | order_hour_of_day<=6),1,0),
+               day=ifelse(night!=1,1,0))
+
 
 orders_products <- orders %>% 
         inner_join(orderp, by = "order_id") 
@@ -102,6 +109,10 @@ prd <- orders_products %>%
         summarise(
                 prod_orders = n(),
                 prod_reorders = sum(reordered),
+                #prod_wdays = sum(wdays==1),
+                #prod_wends = sum(wends==1),
+                #prod_day = sum(day==1),
+                #prod_night = sum(night==1),
                 prod_first_orders = sum(product_time == 1),
                 prod_second_orders = sum(product_time == 2),
                 prod_mean_add_to_cart_order = mean(add_to_cart_order),
@@ -115,7 +126,6 @@ prd_aisle <- prd %>%
                 aisle_reorders = sum(prod_reorders),
                 aisle_first_orders = sum(prod_first_orders),
                 aisle_second_orders = sum(prod_second_orders),
-                aisle_mean_add_to_cart_order = mean(prod_mean_add_to_cart_order),
                 aisle_days_since_prior = mean(prod_days_since_prior, na.rm = T)) %>%                
         ungroup()
 
@@ -123,26 +133,28 @@ prd_dep <- prd %>%
         group_by(department) %>%
         summarise(
                 dep_orders = sum(prod_orders),
-                dep_reorders = sum(prod_reorders),
-                dep_first_orders = sum(prod_first_orders),
-                dep_second_orders = sum(prod_second_orders),
-                dep_mean_add_to_cart_order = mean(prod_mean_add_to_cart_order),
-                dep_days_since_prior = mean(prod_days_since_prior, na.rm = T)) %>%               
+                dep_reorders = sum(prod_reorders)
+                #dep_first_orders = sum(prod_first_orders),
+                #dep_second_orders = sum(prod_second_orders)
+                #dep_days_since_prior = mean(prod_days_since_prior, na.rm = T)
+                ) %>%               
         ungroup()
         
 prd <- prd %>% inner_join(prd_aisle) %>% inner_join(prd_dep)        
 
+rm(prd_aisle,prd_dep)
+
+#prd$prod_wend_ratio <- prd$prod_wends*2.5/prd$prod_wdays
+#prd$prod_night_ratio <- prd$prod_night*5/prd$prod_day
 prd$prod_reorder_probability <- prd$prod_second_orders / prd$prod_first_orders
 prd$prod_reorder_times <- 1 + prd$prod_reorders / prd$prod_first_orders
-prd$prod_reorder_ratio <- prd$prod_reorders / prd$prod_orders
+#prd$prod_reorder_ratio <- prd$prod_reorders / prd$prod_orders
 
 prd$aisle_reorder_probability <- prd$aisle_second_orders / prd$aisle_first_orders
 prd$aisle_reorder_times <- 1 + prd$aisle_reorders / prd$aisle_first_orders
-prd$aisle_reorder_ratio <- prd$aisle_reorders / prd$aisle_orders
 
-prd$dep_reorder_probability <- prd$dep_second_orders / prd$dep_first_orders
-prd$dep_reorder_times <- 1 + prd$dep_reorders / prd$dep_first_orders
-prd$dep_reorder_ratio <- prd$dep_reorders / prd$dep_orders
+#prd$dep_reorder_probability <- prd$dep_second_orders / prd$dep_first_orders
+#prd$dep_reorder_times <- 1 + prd$dep_reorders / prd$dep_first_orders
 
 
 #additional features---------------------------------------------------
@@ -150,20 +162,19 @@ prd$dep_reorder_ratio <- prd$dep_reorders / prd$dep_orders
 prd$prod_penetration <- prd$prod_first_orders / max(orders_products$user_id)
 prd$prod_double_pntr <- prd$prod_second_orders / max(orders_products$user_id)
 
-prd$aisle_penetration <- prd$aisle_first_orders / max(orders_products$user_id)
-prd$aisle_double_pntr <- prd$aisle_second_orders / max(orders_products$user_id)
-
-prd$dep_penetration <- prd$dep_first_orders / max(orders_products$user_id)
-prd$dep_double_pntr <- prd$dep_second_orders / max(orders_products$user_id)
+# prd$aisle_penetration <- prd$aisle_first_orders / max(orders_products$user_id)
+# prd$aisle_double_pntr <- prd$aisle_second_orders / max(orders_products$user_id)
+# 
+# prd$dep_penetration <- prd$dep_first_orders / max(orders_products$user_id)
+# prd$dep_double_pntr <- prd$dep_second_orders / max(orders_products$user_id)
 
 #aisles, departments-----------------------------------------------
 
 
 #---------------------------------------------------
 
-prd <- prd %>% select(-prod_reorders, -prod_first_orders, -prod_second_orders, 
-                      -dep_reorders, -dep_first_orders, -dep_second_orders,
-                      -aisle_reorders, -aisle_first_orders, -aisle_second_orders)
+prd <- prd %>% select(-prod_reorders, -prod_first_orders, -prod_second_orders, -aisle_orders, -dep_orders,
+                      -dep_reorders, -aisle_reorders, -aisle_first_orders, -aisle_second_orders)
 
 rm(products)
 gc()
@@ -189,15 +200,13 @@ us <- orders_products %>%
   group_by(user_id) %>%
   summarise(
     user_total_products = n(),
-    user_reorder_ratio = sum(reordered == 1) / sum(order_number > 1),
-    user_distinct_products = n_distinct(product_id),
-    user_deps = n_distinct(department),
-    user_aisles = n_distinct(aisle)
+    user_reorder_ratio = sum(reordered == 1) / sum(order_number > 1)
+    #user_distinct_products = n_distinct(product_id)
   )
 
 users <- users %>% inner_join(us)
 users$user_average_basket <- users$user_total_products / users$user_orders
-users$user_product_diversity <- users$user_distinct_products / users$user_orders
+#users$user_product_diversity <- users$user_distinct_products / users$user_orders
 
 
 us <- orders %>%
@@ -219,6 +228,10 @@ data <- orders_products %>%
         group_by(user_id, product_id) %>% 
         summarise(
                 up_orders = n(),
+                #up_wdays = sum(wdays==1),
+                #up_wends = sum(wends==1),
+                up_day = sum(day==1),
+                #up_night = sum(night==1),
                 up_first_order = min(order_number),
                 up_last_order = max(order_number),
                 up_average_cart_position = mean(add_to_cart_order))
@@ -226,8 +239,7 @@ data <- orders_products %>%
 ud <- orders_products %>%
         group_by(user_id, department) %>%
         summarise(
-                ud_distinct_products<-n_distinct(product_id),
-                ud_orders <- n_distinct(order_id),
+                ud_orders = length(unique(order_id)),
                 ud_first_order = min(order_number),
                 ud_last_order = max(order_number)
         )
@@ -235,24 +247,12 @@ ud <- orders_products %>%
 ua <- orders_products %>%
         group_by(user_id, aisle) %>%
         summarise(
-                ua_distinct_products<-n_distinct(product_id),
-                ua_orders <- n_distinct(order_id),
+                ua_orders = length(unique(order_id)),
                 ua_first_order = min(order_number),
                 ua_last_order = max(order_number)
         )
         
-        
 
-# Preffered DoW, HoD ----------------------------------------------------------------
-
-# dt1=setDT(orders_products)[, .N, by=.(user_id, product_id, order_dow)][, order_dow[which.max(N)],by=.(user_id, product_id)]
-# names(dt1)[names(dt1) == "V1"] = "user_preferred_dow"
-# 
-# dt2=setDT(orders_products)[, .N, by=.(user_id, product_id, order_hour_of_day)][, order_hour_of_day[which.max(N)],by=.(user_id, product_id)]
-# names(dt2)[names(dt2) == "V1"] = "user_preferred_hod"
-# 
-# data <- data %>% inner_join(dt1, by = c("user_id", "product_id")) %>% inner_join(dt2, by = c("user_id", "product_id"))
-#rm(dt1, dt2)
 rm(orders_products, orders)
 
 data <- data %>%
@@ -270,12 +270,11 @@ data$ua_order_rate <- data$ua_orders / data$user_orders
 data$ua_orders_since_last_order <- data$user_orders - data$ua_last_order
 data$ua_order_rate_since_first_order <- data$ua_orders / (data$user_orders - data$ua_first_order + 1)
 data$ud_order_rate <- data$ud_orders / data$user_orders
-data$ud_orders_since_last_order <- data$user_orders - data$ud_last_order
 data$ud_order_rate_since_first_order <- data$ud_orders / (data$user_orders - data$ud_first_order + 1)
 
 data <- data %>%
-  left_join(ordert %>% select(user_id, product_id, reordered),
-            by = c("user_id", "product_id"))
+        select(-ua_first_order, -ua_last_order, -ud_first_order, -ud_last_order, -ud_orders, -user_orders) %>%
+        left_join(ordert %>% select(user_id, product_id, reordered), by = c("user_id", "product_id"))
 rm(ordert)
 
 rm(prd, users)
