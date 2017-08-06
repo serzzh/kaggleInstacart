@@ -53,7 +53,7 @@ require(MLmetrics)
 source('include.R')
 
 ## 20% of the sample size
-smp_size <- floor(0.4 * nrow(train))
+smp_size <- floor(0.2 * nrow(train))
 
 ## set the seed to make your partition reproductible
 set.seed(123)
@@ -77,13 +77,14 @@ params <- list(
         "subsample"           = 0.77,
         "colsample_bytree"    = 0.95,
         "alpha"               = 2e-05,
-        "lambda"              = 10,
-        "watchlist"           = watchlist
+        "lambda"              = 10
 )
 
 
 
-model <- xgboost(data = X, params = params, nrounds = 90)
+
+#model_cv <-xgb.cv(data = X, params = params, nrounds = 90, nfold=5, early_stopping_rounds = 10) 
+model <- xgb.train(data = X, params = params, nrounds = 150, watchlist = watchlist, early_stopping_rounds = 10)
 #model <- xgb.load('xgboost.model')
 xgb.save(model,'xgb1.model')
 
@@ -95,7 +96,7 @@ xgb.ggplot.importance(importance)
 rm(X, Y, subtrain)
 gc()
 
-#train-logloss last 0.242919
+#train-logloss last [150]train-logloss:0.240557	test-logloss:0.243559 
 
 ## Threshold prediction-----------------------------------------------
 
@@ -108,11 +109,13 @@ gc()
 ## adding metrics to training dataset
 ##subtrain<-add_metrics(subtrain)
 
-# Validation, initial (threshold=0.21, Pc=0.389, Rc=0.51, f1=0.4418), last=0.4426484
+# Validation, initial (threshold=0.21, Pc=0.389, Rc=0.51, f1=0.4418), last=0.445039 (150)
 print(my_validation(model, valid, 0.21))
 
 source('include.R')
 source('f1.R')
+source('f1cpp.R')
+
 # Apply models -------------------------------------------------------------
 X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id, -aisle, -department)))
 test$prob <- predict(model, X)
@@ -129,10 +132,14 @@ submission <- result %>%
   group_by(order_id) %>%
   summarise(
     products = paste(product_id, collapse = " ")
-    #n_prod = n()-sum(product_id=='None')
   )
 
-#submission[submission$n_prod==0 | is.na(submission$n_prod),]$products<-'None'
+# submission <- test %>%
+#         select(order_id, product_id, prob) %>%
+#         group_by(order_id) %>%
+#         summarise(products = exact_F1_max_none(prob, product_id))
+
+
 
 missing <- data.frame(
   order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
@@ -140,7 +147,6 @@ missing <- data.frame(
 )
 
 submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
-submission$n_prod<-NULL
 submission[submission$products=='' | is.na(submission$products),]<-'None'
 write.csv(submission, file = "submit.csv", row.names = F)
 
