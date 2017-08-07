@@ -41,7 +41,6 @@ apply_threshold <- function(df){
 
 
 
-
         
 ## Validation of both models
 my_validation <- function (model, valid, threshold, method){

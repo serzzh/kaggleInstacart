@@ -84,7 +84,7 @@ params <- list(
 
 
 #model_cv <-xgb.cv(data = X, params = params, nrounds = 90, nfold=5, early_stopping_rounds = 10) 
-model <- xgb.train(data = X, params = params, nrounds = 150, watchlist = watchlist, early_stopping_rounds = 10)
+model <- xgb.train(data = X, params = params, nrounds = 250, watchlist = watchlist, early_stopping_rounds = 10)
 #model <- xgb.load('xgboost.model')
 xgb.save(model,'xgb1.model')
 
@@ -109,7 +109,7 @@ gc()
 ## adding metrics to training dataset
 ##subtrain<-add_metrics(subtrain)
 
-# Validation, initial (threshold=0.21, Pc=0.389, Rc=0.51, f1=0.4418), last=0.445039 (150)
+# Validation, initial (threshold=0.21, Pc=0.389, Rc=0.51, f1=0.4418), last=0.4454979 (250)
 print(my_validation(model, valid, 0.21))
 
 source('include.R')

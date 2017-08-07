@@ -1,4 +1,4 @@
-get_expectations <- function(P, pNone=NULL){
+get_expectations_p <- function(P, pNone=NULL){
         expectations = list()
         P <- as.vector(as.matrix(P))
         n <- length(P)
@@ -42,7 +42,7 @@ get_expectations <- function(P, pNone=NULL){
 
 
 max_expectations <- function(P, pNone=NULL){
-        expectations <- get_expectations(P, pNone)
+        expectations <- get_expectations_p(P, pNone)
         ix_max <- arrayInd(which.max(expectations), dim(expectations))
         max_f1 <- expectations[ix_max]
         predNone <- ifelse((ix_max[1] == 1), TRUE, FALSE)
