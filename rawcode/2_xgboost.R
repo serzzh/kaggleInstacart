@@ -2,31 +2,24 @@
 ###########################################################################################################
 #
 # Kaggle Instacart competition
-# Fabien Vavrand, June 2017
-# Simple xgboost starter, score 0.3791 on LB
-# Products selection is based on product by product binary classification, with a global threshold (0.21)
-#
+# Sergey Rakhmatullin, August 2017
+# based on Fabien Vavrand script, June 2017
+# Xgboost classifier, score 0.3974 on LB
+# Products selection is based on product by product binary classification, with a optimized threshold
+# F1 maximization
 ###########################################################################################################
 
 library(data.table)
 library(dplyr)
 library(tidyr)
 
-
 # Load Data ---------------------------------------------------------------
 path <- "../input"
 data <- readRDS(file.path(path, "data.RDS"))
 
-# Feature tuning - remove features to study influence
-#feat <- read.csv(file.path(path, "features.csv"))
-# rem_feat = c( 'user_order_recency', 
-#              'prod_mean_add_to_cart_order', 
-#              'prod_days_since_prior',
-#              'user_product_diversity',
-#              'prod_penetration',
-#              'prod_double_penetration',
-#              'weekly_orders')
-#data <- data[!colnames(data) %in% feat[10:27]]
+data <- data %>% select(-x.x, -x.y, -dep_third_orders, -org, -user_weekly_orders, -dep_reorder_prob2, 
+                        -ud_orders_since_last_order, -dep_reorder_times, -dep_second_orders, -dep_days_since_prior,
+                        -ud_reorder_ratio, -aisle_reorder_prob2, -dep_first_orders)
 
 # Train / Test datasets ---------------------------------------------------
 
@@ -53,7 +46,7 @@ require(MLmetrics)
 source('include.R')
 
 ## 20% of the sample size
-smp_size <- floor(0.2 * nrow(train))
+smp_size <- floor(0.4 * nrow(train))
 
 ## set the seed to make your partition reproductible
 set.seed(123)
@@ -62,6 +55,13 @@ train_ind <- sample(seq_len(nrow(train)), size = smp_size)
 subtrain <- train[train_ind,]
 valid <- train[-train_ind,] %>% sample_frac(0.3)
 rm(train)
+
+# Load Word2Vec data ------------------------------------------------------
+prod_emb <- read.csv(file.path(path, "product_embeddings.csv"))
+prod_emb <- prod_emb %>% select(-X,-product_name,-aisle_id,-department_id)
+prod_emb$product_id <- as.character(prod_emb$product_id)
+subtrain <- subtrain %>% inner_join(prod_emb)
+valid <- valid %>% inner_join(prod_emb)
 
 X <- xgb.DMatrix(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id, -aisle, -department)), label = subtrain$reordered)
 Y <- xgb.DMatrix(as.matrix(valid %>% select(-reordered, -order_id, -product_id, -aisle, -department)), label = valid$reordered)
@@ -81,11 +81,9 @@ params <- list(
 )
 
 
-
-
 #model_cv <-xgb.cv(data = X, params = params, nrounds = 90, nfold=5, early_stopping_rounds = 10) 
-model <- xgb.train(data = X, params = params, nrounds = 250, watchlist = watchlist, early_stopping_rounds = 10)
-#model <- xgb.load('xgboost.model')
+model <- xgb.train(data = X, params = params, nrounds = 150, watchlist = watchlist, early_stopping_rounds = 10)
+#model <- xgb.load('xgb1.model')
 xgb.save(model,'xgb1.model')
 
 importance <- xgb.importance(colnames(X), model = model)
@@ -96,20 +94,9 @@ xgb.ggplot.importance(importance)
 rm(X, Y, subtrain)
 gc()
 
-#train-logloss last [150]train-logloss:0.240557	test-logloss:0.243559 
+#train-logloss last [250]	train-logloss:0.238413	test-logloss:0.244279 
 
-## Threshold prediction-----------------------------------------------
-
-
-#subtrain$prob <- predict(model, X)
-#rm(X)
-
-
-
-## adding metrics to training dataset
-##subtrain<-add_metrics(subtrain)
-
-# Validation, initial (threshold=0.21, Pc=0.389, Rc=0.51, f1=0.4418), last=0.4454979 (250)
+# Validation, initial (threshold=0.21, Pc=0.389, Rc=0.51, f1=0.4418), last=0.4454979 (250) 0.4440433
 print(my_validation(model, valid, 0.21))
 
 source('include.R')
@@ -117,6 +104,7 @@ source('f1.R')
 source('f1cpp.R')
 
 # Apply models -------------------------------------------------------------
+test <- test %>% inner_join(prod_emb)
 X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id, -aisle, -department)))
 test$prob <- predict(model, X)
 

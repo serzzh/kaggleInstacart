@@ -1,48 +1,58 @@
-get_expectations_p <- function(P, pNone=NULL){
-        expectations = list()
-        P <- as.vector(as.matrix(P))
-        n <- length(P)
-        DP_C = matrix(0L, nrow = n+2, ncol = n+1) 
-        pNone <- ifelse(is.null(pNone), prod(1.0 - P), pNone)
-        DP_C[1,1] <- 1.0
-        for (j in 2:(n)) DP_C[1,j] <- (1.0 - P[j-1]) * DP_C[1, j-1]
+#Author: Faron, Lukasz Grad
+#
+# Quite fast implementation of Faron's expected F1 maximization using Rcpp and R
+library(inline)
+library(Rcpp)
+Sys.setenv("PKG_CXXFLAGS"="-std=c++11")
 
-        for (i in 2:(n+1)){
-                DP_C[i,i] <- P[i-1] * DP_C[i-1, i-1]
-                for (j in i:(n+1)) DP_C[i,j] <- P[j-1] * DP_C[i-1, j-1] + (1.0 - P[j-1]) * DP_C[i, j-1]
-        } 
-        
-        DP_S = matrix(0L, nrow = 2*n+1, ncol = 1) 
-        DP_SNone = matrix(0L, nrow = 2*n+1, ncol = 1)
-        
-        for (i in 2:(2*n+1)){
-                DP_S[i] = 1. / (1. * (i-1))
-                DP_SNone[i] = 1. / (1. * (i-1) + 1)
-                
+# Input: p: item reorder probabilities (sorted), p_none: none probability (0 if not specified)
+# Output: matrix[2][n + 1] out: out[0][j] - F1 score with top j products and None
+#                               out[1][j] - F1 score with top j products
+cppFunction(
+        'NumericMatrix get_expectations(NumericVector p, double p_none) {
+        // Assuming p is sorted, p_none == 0 if not specified
+        int n = p.size();
+        NumericMatrix expectations = NumericMatrix(2, n + 1);
+        double DP_C[n + 2][n + 1];
+        std::fill(DP_C[0], DP_C[0] + (n + 2) * (n + 1), 0);
+        if (p_none == 0.0) {
+        p_none = std::accumulate(p.begin(), p.end(), 1.0, [](double &a, double &b) {return a * (1.0 - b);});
         }
-
-        for (k in (n+1):1){
-                f1 <-0
-                f1None <- 0                
-                for (k1 in 1:(n+1)){
-                        f1 <- f1 + 2 * (k1-1) * DP_C[k1, k] * DP_S[k + k1 - 1]
-                        f1None <- f1None + 2 * (k1-1) * DP_C[k1,k] * DP_SNone[k + k1 - 1]
-                }
-                if (k>2){
-                        for (i in 2:(2*k-3)){
-                                DP_S[i] <-  (1 - P[k - 1]) * DP_S[i] + P[k - 1] * DP_S[i + 1]
-                                DP_SNone[i] <- (1 - P[k - 1]) * DP_SNone[i] + P[k - 1] * DP_SNone[i + 1]
-                        }
-                }
-                expectations[[length(expectations)+1]] <- list(f1None + 2 * pNone / (1 + k), f1)
+        DP_C[0][0] = 1.0;
+        for (int j = 1; j < n; ++j)
+        DP_C[0][j] = (1.0 - p[j - 1]) * DP_C[0][j - 1];
+        for (int i = 1; i < n + 1; ++i) {
+        DP_C[i][i] = DP_C[i - 1][i - 1] * p[i - 1];
+        for (int j = i + 1; j < n + 1; ++j)
+        DP_C[i][j] = p[j - 1] * DP_C[i - 1][j - 1] + (1.0 - p[j - 1]) * DP_C[i][j - 1];
         }
-        
-        return(matrix(unlist(rev(expectations)), nrow = 2))
-}
+        double DP_S[2 * n + 1];
+        double DP_SNone[2 * n + 1];
+        for (int i = 1; i < (2 * n + 1); ++i) {
+        DP_S[i] = 1.0 / (1.0 * i);
+        DP_SNone[i] = 1.0 / (1.0 * i + 1);
+        }
+        for (int k = n; k >= 0; --k) {
+        double f1 = 0.0;
+        double f1None = 0.0;
+        for (int k1 = 0; k1 < (n + 1); ++k1) {
+        f1 += 2 * k1 * DP_C[k1][k] * DP_S[k + k1];
+        f1None += 2 * k1 * DP_C[k1][k] * DP_SNone[k + k1];
+        }
+        for (int i = 1; i < (2 * k - 1); ++i) {
+        DP_S[i] = (1 - p[k - 1]) * DP_S[i] + p[k - 1] * DP_S[i + 1];
+        DP_SNone[i] = (1 - p[k - 1]) * DP_SNone[i] + p[k - 1] * DP_SNone[i + 1];
+        }
+        expectations(0, k) = f1None + 2 * p_none / (2.0 + k);
+        expectations(1, k) = f1;
+        }
+        return expectations;
+        }'
+)
 
 
-max_expectations <- function(P, pNone=NULL){
-        expectations <- get_expectations_p(P, pNone)
+max_expectations <- function(P, pNone=0.0){
+        expectations <- get_expectations(as.vector(P), pNone)
         ix_max <- arrayInd(which.max(expectations), dim(expectations))
         max_f1 <- expectations[ix_max]
         predNone <- ifelse((ix_max[1] == 1), TRUE, FALSE)
@@ -50,7 +60,7 @@ max_expectations <- function(P, pNone=NULL){
         return(list(best_k, predNone, max_f1))
 }
 
-print_best_pred <- function(P, pNone=NULL){
+print_best_pred <- function(P, pNone=0.0){
         
         P <- sort(P, TRUE)
         opt <- max_expectations(P, pNone)
@@ -69,53 +79,3 @@ print_best_pred(c(0.5, 0.4, 0.3, 0.35, 0.33, 0.31, 0.29, 0.27, 0.25, 0.20, 0.15,
 print_best_pred(c(0.5, 0.4, 0.3, 0.35, 0.33, 0.31, 0.29, 0.27, 0.25, 0.20, 0.15, 0.10), 0.2)
 
 
-
-calc_approx_ef1 <- function(df_group){
-        df <- df_group
-        order_id <- df$order_id[1]
-        df <- data.table(df)[order(-prob),c('product_id', 'prob', 'true')]
-        df$true <- apply(df$true,1,as.integer)
-        pred_none <- cumprod(1-df$prod)
-        # add 'None' as product with p_none
-        # ************************************************************
-        
-        # ************************************************************
-        pi_sum <- sum(df$prod)
-        len <- length(df$product_id)
-        mask <- tril(ones(len, len))
-        hi_sum <- sum(mask)
-        
-}
-        
-        
-
-# df = df.sort_values('pred', ascending=False)[['product_id', 'pred', 'true']]
-# products, preds = (zip(*df.sort_values('pred', ascending=False)[['product_id', 'pred']].values))
-# _true = list(map(int, df['true'].values))
-# pred_none = np.cumprod([1-x for x in preds])[-1]
-# 
-# # add 'None' as product with p_none
-# # ************************************************************
-# products = list(products)[::-1]
-# preds = list(preds)[::-1]
-# ii = bisect.bisect(preds, pred_none)
-# bisect.insort(preds, pred_none)
-# products.insert(ii, 65535)
-# products = products[::-1]
-# preds = preds[::-1]
-# # ************************************************************
-# 
-# pi_sum = np.sum(preds)
-# _len = len(products)
-# mask = np.tril(np.ones((_len, _len)))
-# hi_sum = mask.sum(1)
-# 
-# phi_sum = 2*np.dot(mask, preds)
-# ef1 = phi_sum / (pi_sum+hi_sum)
-# 
-# ef1_max = np.max(ef1)
-# 
-# prod_max = ' '.join(map(str, map(int, filter(bool, mask[np.argmax(ef1)]*products))))
-# prod_list = prod_max.replace('65535', 'None') # if ef1_max > pred_none else 'None'
-# 
-# return pd.DataFrame({'products':[prod_list], 'ef1':[ef1_max]})

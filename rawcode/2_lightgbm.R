@@ -2,31 +2,24 @@
 ###########################################################################################################
 #
 # Kaggle Instacart competition
-# Fabien Vavrand, June 2017
-# Simple xgboost starter, score 0.3791 on LB
-# Products selection is based on product by product binary classification, with a global threshold (0.21)
-#
+# Sergey Rakhmatullin, August 2017
+# based on Fabien Vavrand script, June 2017
+# Xgboost classifier, score 0.3974 on LB
+# Products selection is based on product by product binary classification, with a optimized threshold
+# F1 maximization
 ###########################################################################################################
 
 library(data.table)
 library(dplyr)
 library(tidyr)
 
-
 # Load Data ---------------------------------------------------------------
 path <- "../input"
 data <- readRDS(file.path(path, "data.RDS"))
 
-# Feature tuning - remove features to study influence
-#feat <- read.csv(file.path(path, "features.csv"))
-# rem_feat = c( 'user_order_recency', 
-#              'prod_mean_add_to_cart_order', 
-#              'prod_days_since_prior',
-#              'user_product_diversity',
-#              'prod_penetration',
-#              'prod_double_penetration',
-#              'weekly_orders')
-#data <- data[!colnames(data) %in% feat[10:27]]
+data <- data %>% select(-x.x, -x.y, -dep_third_orders, -org, -user_weekly_orders, -dep_reorder_prob2, 
+                        -ud_orders_since_last_order, -dep_reorder_times, -dep_second_orders, -dep_days_since_prior,
+                        -ud_reorder_ratio, -aisle_reorder_prob2, -dep_first_orders)
 
 # Train / Test datasets ---------------------------------------------------
 
@@ -53,7 +46,7 @@ require(MLmetrics)
 source('include.R')
 
 ## 20% of the sample size
-smp_size <- floor(0.4 * nrow(train))
+smp_size <- floor(0.6 * nrow(train))
 
 ## set the seed to make your partition reproductible
 set.seed(123)
@@ -63,41 +56,37 @@ subtrain <- train[train_ind,]
 valid <- train[-train_ind,] %>% sample_frac(0.3)
 rm(train)
 
-params <- list(
-        objective           = "binary",
-        metric              = "binary_logloss",
-        learning_rate       = 0.1,
-        verbose             = 2,
-        #nfold               = 5,
-        min_data            =5
-        #nrounds             =90
-        #"eta"                 = 0.1,
-        #"max_depth"           = 8
-        # "min_child_weight"    = 10,
-        # "gamma"               = 0.70,
-        # "subsample"           = 0.77,
-        # "colsample_bytree"    = 0.95,
-        # "alpha"               = 2e-05,
-        # "lambda"              = 10,
-        # "watchlist"           = watchlist
-)
+# Load Word2Vec data ------------------------------------------------------
+prod_emb <- read.csv(file.path(path, "product_embeddings.csv"))
+prod_emb <- prod_emb %>% select(-X,-product_name,-aisle_id,-department_id)
+prod_emb$product_id <- as.character(prod_emb$product_id)
+subtrain <- subtrain %>% inner_join(prod_emb)
+valid <- valid %>% inner_join(prod_emb)
 
-X <- lgb.Dataset(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id, -aisle, -department)), label = subtrain$reordered)
-#rm(subtrain)
-#model <- lgb.train(params, X, 90)
+# X <- lgb.Dataset(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id, -aisle, -department)), 
+#                  label = subtrain$reordered, free_raw_data = FALSE)
+# Y <- lgb.Dataset(as.matrix(valid %>% select(-reordered, -order_id, -product_id, -aisle, -department)), 
+#                  label = valid$reordered, free_raw_data = FALSE )
+# valids <- list(train = X, test = Y)
+# 
+# model <- lightgbm(data = X, nrounds=150, metric = "binary_logloss", learning_rate = 0.1, 
+#                   verbosity = 2, min_data = 5, device='gpu', early_stopping_rounds = 10, #valids = valids, 
+#                   objective = "binary")
+# lgb.save(model,'lgb.model')
 
-subtrain$prob <- predict(model,X)
+model <- lgb.load('lgb.model')
 
-#model <- xgb.load('xgboost.model')
-lgb.save(model,'lgb.model')
 
-importance <- lgb.importance(model)
+#importance <- lgb.importance(model)
 
 #feat<-importance$Feature
 
 #xgb.ggplot.importance(importance)
-rm(X, Y, subtrain)
-gc()
+
+
+# subtrain$prob <- predict(model, as.matrix(subtrain %>% select(-reordered, -order_id, -product_id, -aisle, -department)))
+# rm(X, Y, subtrain)
+# gc()
 
 #train-logloss last 0.2434
 
@@ -119,25 +108,23 @@ print(my_validation(model, valid, 0.21, 'lgbm'))
 source('include.R')
 source('f1.R')
 # Apply models -------------------------------------------------------------
-X <- xgb.DMatrix(as.matrix(test %>% select(-order_id, -product_id, -aisle, -department)))
-test$prob <- predict(model, X)
+test$prob <- predict(model, as.matrix(test %>% select(-order_id, -product_id, -aisle, -department)))
 
 # Apply threshold
 
 result <- apply_threshold(test)
 
-#print(test, n=200)
-#test$reordered <- (test$reordered > 0.20) * 1
+
 
 submission <- result %>%
   filter(reordered == 1) %>%
   group_by(order_id) %>%
   summarise(
     products = paste(product_id, collapse = " ")
-    #n_prod = n()-sum(product_id=='None')
+
   )
 
-#submission[submission$n_prod==0 | is.na(submission$n_prod),]$products<-'None'
+
 
 missing <- data.frame(
   order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
