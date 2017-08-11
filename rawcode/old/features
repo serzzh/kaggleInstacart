@@ -1,0 +1,59 @@
+                            Feature         Gain        Cover    Frequency
+ 1:                   up_order_rate 3.055594e-01 1.196240e-01 0.0489120327
+ 2:      up_orders_since_last_order 2.464375e-01 1.745916e-01 0.0941045192
+ 3: up_order_rate_since_first_order 1.955122e-01 1.263812e-01 0.0528175563
+ 4:                       up_orders 1.078226e-01 6.652049e-02 0.0414729403
+ 5:        prod_reorder_probability 3.205218e-02 7.463654e-02 0.0719732193
+ 6:              prod_reorder_times 1.911011e-02 4.151765e-02 0.0438906453
+ 7:              user_reorder_ratio 1.881570e-02 6.563660e-02 0.0680676957
+ 8:              user_order_recency 1.690469e-02 5.280532e-02 0.0782964478
+ 9:           time_since_last_order 1.051438e-02 2.996541e-02 0.0364515529
+10:                   up_last_order 4.192734e-03 9.571428e-03 0.0184117538
+11:     prod_mean_add_to_cart_order 4.037443e-03 2.562901e-02 0.0247349823
+12:                   ua_order_rate 3.427852e-03 1.288711e-02 0.0143202529
+13:                prod_penetration 2.727732e-03 1.563778e-02 0.0362655756
+14:             aisle_reorder_times 2.328991e-03 7.013697e-03 0.0128324344
+15:                   weekly_orders 2.241761e-03 7.778196e-03 0.0184117538
+16:                     prod_orders 2.089236e-03 1.491892e-02 0.0206434815
+17:                     user_period 2.074102e-03 9.769763e-03 0.0221313000
+18:                       ua_orders 1.897011e-03 1.372180e-03 0.0050213874
+19:                prod_double_pntr 1.814551e-03 8.818292e-03 0.0169239353
+20:             user_average_basket 1.623969e-03 2.074926e-02 0.0228752092
+21:       aisle_reorder_probability 1.541549e-03 2.856773e-03 0.0096708202
+22: ua_order_rate_since_first_order 1.535794e-03 2.940901e-03 0.0098567975
+23:        up_average_cart_position 1.486196e-03 2.092234e-02 0.0172958899
+24:           prod_days_since_prior 1.421143e-03 9.068128e-03 0.0239910731
+25: ud_order_rate_since_first_order 1.326491e-03 7.060500e-03 0.0063232286
+26:      user_mean_days_since_prior 1.218606e-03 2.336308e-03 0.0156220941
+27:                   ud_order_rate 1.179237e-03 7.744780e-03 0.0133903664
+28:          aisle_days_since_prior 9.341726e-04 4.493746e-03 0.0143202529
+29:      ua_orders_since_last_order 7.965074e-04 7.554279e-03 0.0081830017
+30:         dep_reorder_probability 6.829201e-04 2.876181e-03 0.0061372513
+31:          user_product_diversity 5.550437e-04 1.610833e-03 0.0152501395
+32:             user_total_products 4.895612e-04 5.493446e-04 0.0098567975
+33:                  up_first_order 4.864516e-04 1.231369e-03 0.0048354101
+34:              prod_reorder_ratio 4.432255e-04 5.461923e-03 0.0040915008
+35:                      dep_orders 4.382092e-04 3.144939e-03 0.0063232286
+36:          user_distinct_products 4.271042e-04 2.160789e-03 0.0113446160
+37:                     user_orders 4.040416e-04 2.397306e-03 0.0050213874
+38:            dep_days_since_prior 3.575726e-04 2.528465e-03 0.0044634555
+39:            ua_distinct_products 3.125660e-04 7.121725e-03 0.0065092059
+40:            ud_distinct_products 2.555769e-04 8.952754e-04 0.0076250697
+41:                       ud_orders 2.391153e-04 3.563905e-04 0.0046494328
+42:      dep_mean_add_to_cart_order 2.354398e-04 1.149106e-03 0.0031616143
+43:    aisle_mean_add_to_cart_order 2.346459e-04 2.007698e-03 0.0055793193
+44:               aisle_penetration 2.191731e-04 7.081478e-04 0.0053933420
+45:                    aisle_orders 1.967511e-04 2.825016e-03 0.0037195462
+46:                     user_aisles 1.925600e-04 3.094676e-04 0.0063232286
+47:               dep_reorder_times 1.863609e-04 1.401818e-03 0.0022317277
+48:                   ud_last_order 1.545654e-04 4.248941e-04 0.0027896597
+49:      ud_orders_since_last_order 1.452379e-04 4.894033e-04 0.0029756370
+50:                   ua_last_order 1.352552e-04 6.223913e-04 0.0024177050
+51:                  ua_first_order 1.243928e-04 4.221073e-03 0.0022317277
+52:               dep_reorder_ratio 1.058609e-04 1.325960e-03 0.0009298866
+53:                       user_deps 1.009658e-04 4.632285e-04 0.0027896597
+54:               aisle_double_pntr 8.771708e-05 2.015379e-03 0.0020457504
+55:             aisle_reorder_ratio 5.772424e-05 5.613971e-04 0.0011158639
+56:                 dep_penetration 5.101572e-05 8.067615e-05 0.0014878185
+57:                 dep_double_pntr 4.201382e-05 1.444721e-04 0.0007439092
+58:                  ud_first_order 1.506453e-05 1.130843e-04 0.0007439092

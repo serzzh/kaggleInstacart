@@ -43,14 +43,14 @@ apply_threshold <- function(df){
 
         
 ## Validation of both models
-my_validation <- function (model, valid, threshold, method){
-                
-        V <- xgb.DMatrix(as.matrix(valid %>% select(-reordered, - order_id, -product_id, -aisle, -department)))
+my_validation <- function (model, valid, threshold, method = 'lgbm'){
+        
+        V <- as.matrix(valid %>% select(-reordered, - order_id, -product_id, -aisle, -department))        
+        #V <- ifelse((method == 'xgb'), xgb.DMatrix(V), V)
+        
         valid$pred <- (predict(model, V) > threshold) * 1
         valid$percent <- predict(model, V)
                 
-        
-
         valid$product_id[is.na(valid$product_id) | valid$product_id=='None' | valid$product_id==0] <- 'None'
         
         pred <- valid %>%

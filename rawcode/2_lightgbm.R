@@ -63,27 +63,22 @@ prod_emb$product_id <- as.character(prod_emb$product_id)
 subtrain <- subtrain %>% inner_join(prod_emb)
 valid <- valid %>% inner_join(prod_emb)
 
-# X <- lgb.Dataset(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id, -aisle, -department)), 
-#                  label = subtrain$reordered, free_raw_data = FALSE)
+X <- lgb.Dataset(as.matrix(subtrain %>% select(-reordered, -order_id, -product_id, -aisle, -department)),
+                 label = subtrain$reordered, free_raw_data = FALSE)
 # Y <- lgb.Dataset(as.matrix(valid %>% select(-reordered, -order_id, -product_id, -aisle, -department)), 
 #                  label = valid$reordered, free_raw_data = FALSE )
 # valids <- list(train = X, test = Y)
 # 
-# model <- lightgbm(data = X, nrounds=150, metric = "binary_logloss", learning_rate = 0.1, 
-#                   verbosity = 2, min_data = 5, device='gpu', early_stopping_rounds = 10, #valids = valids, 
-#                   objective = "binary")
-# lgb.save(model,'lgb.model')
+model <- lightgbm(data = X, nrounds = 350, metric = "binary_logloss", learning_rate = 0.05,
+                  verbosity = 2, min_data = 5, device='gpu', early_stopping_rounds = 10, #valids = valids,
+                  objective = "binary")
 
-model <- lgb.load('lgb.model')
+#lgb.save(model,'lgb.model')
+#model <- lgb.load('lgb.model')
 
 
 #importance <- lgb.importance(model)
-
-#feat<-importance$Feature
-
 #xgb.ggplot.importance(importance)
-
-
 # subtrain$prob <- predict(model, as.matrix(subtrain %>% select(-reordered, -order_id, -product_id, -aisle, -department)))
 # rm(X, Y, subtrain)
 # gc()
@@ -102,13 +97,22 @@ model <- lgb.load('lgb.model')
 ## adding metrics to training dataset
 ##subtrain<-add_metrics(subtrain)
 
-# Validation, initial (threshold=0.21, Pc=0.389, Rc=0.51, f1=0.4418), last=0.4424329
-print(my_validation(model, valid, 0.21, 'lgbm'))
+# Validation, initial (threshold=0.21, Pc=0.389, Rc=0.51, f1=0.4418), last=0.4457864 (90) , 0.4468467 (350)
+print(my_validation(model, valid, 0.21, method = 'lgbm'))
 
 source('include.R')
 source('f1.R')
 # Apply models -------------------------------------------------------------
 test$prob <- predict(model, as.matrix(test %>% select(-order_id, -product_id, -aisle, -department)))
+
+
+# Exchange data
+out_test <- test %>% select(order_id, prob, product_id)
+colnames(out_test) <- c("order_id", "prediction", "product_id")
+write.csv(out_test, file.path(path, "lgbm_my.csv"))
+# ex_test <- read.csv(file.path(path, "lgbm_ew.csv"))
+# colnames(ex_test)<-c('X', 'order_id', 'prob', 'product_id')
+
 
 # Apply threshold
 
