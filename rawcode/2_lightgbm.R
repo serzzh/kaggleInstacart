@@ -107,11 +107,13 @@ test$prob <- predict(model, as.matrix(test %>% select(-order_id, -product_id, -a
 
 
 # Exchange data
-out_test <- test %>% select(order_id, prob, product_id)
-colnames(out_test) <- c("order_id", "prediction", "product_id")
-write.csv(out_test, file.path(path, "lgbm_my.csv"))
-# ex_test <- read.csv(file.path(path, "lgbm_ew.csv"))
-# colnames(ex_test)<-c('X', 'order_id', 'prob', 'product_id')
+#out_test <- test %>% select(order_id, prob, product_id)
+#colnames(out_test) <- c("order_id", "prediction", "product_id")
+#write.csv(out_test, file.path(path, "lgbm_my.csv"))
+ex_test <- read.csv(file.path(path, "prediction_lgbm.csv"))
+colnames(ex_test)<-c('X', 'order_id', 'prob', 'product_id')
+test<-ex_test
+rm(ex_test)
 
 
 # Apply threshold
@@ -130,13 +132,13 @@ submission <- result %>%
 
 
 
-missing <- data.frame(
-  order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
-  products = "None"
-)
-
-submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
-submission$n_prod<-NULL
+# missing <- data.frame(
+#   order_id = unique(test$order_id[!test$order_id %in% submission$order_id]),
+#   products = "None"
+# )
+# 
+# submission <- submission %>% bind_rows(missing) %>% arrange(order_id)
+# submission$n_prod<-NULL
 submission[submission$products=='' | is.na(submission$products),]<-'None'
 write.csv(submission, file = "submit.csv", row.names = F)
 

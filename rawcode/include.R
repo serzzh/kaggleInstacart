@@ -25,17 +25,30 @@ add_metrics <- function(df){
 ## Apply threshold
 apply_threshold <- function(df){
         df <- data.table(df)[order(order_id,-prob),]
+        print (dim(df))
+        df <- df %>% filter(prob>0.01)
+        print (dim(df))
         max_ns <- df %>%
                 select(order_id,prob) %>%
                 group_by(order_id) %>%
-                summarise(max_n = unlist(max_expectations(prob)[1]))
+                summarise(max_n = unlist(max_expectations(prob)[1]), predNone = unlist(max_expectations(prob)[2]))
+        
+        my_none <- max_ns %>% filter(predNone) %>% select(order_id)
+        my_none['product_id'] = 'None'
+        my_none['reordered'] = 1
+        
         df <- df %>%
                 inner_join(max_ns, by='order_id') %>%
-                select(order_id, product_id, prob, max_n) %>%
+                select(order_id, product_id, prob, max_n, predNone) %>%
                 group_by(order_id) %>%
                 mutate(count = row_number(),
                        reordered = (count<=max_n)*1) %>%
-                ungroup()
+                ungroup() %>% select(order_id, product_id, reordered)
+        
+        df$product_id <- as.character(df$product_id)
+        
+        df = bind_rows(df,my_none)
+        
         return(df)
 }
 
