@@ -110,8 +110,22 @@ test$prob <- predict(model, as.matrix(test %>% select(-order_id, -product_id, -a
 #out_test <- test %>% select(order_id, prob, product_id)
 #colnames(out_test) <- c("order_id", "prediction", "product_id")
 #write.csv(out_test, file.path(path, "lgbm_my.csv"))
-ex_test <- read.csv(file.path(path, "prediction_lgbm.csv"))
-colnames(ex_test)<-c('X', 'order_id', 'prob', 'product_id')
+lgbm_test <- read.csv(file.path(path, "prediction_lgbm.csv"))
+arbo_test <- read.csv(file.path(path, "prediction_arboretum.csv"))
+lgbm_test <- lgbm_test %>% filter(prediction > 0.01)
+#arbo_test <- arbo_test %>% filter(prediction > 0.01)
+ex_test <- merge(arbo_test, lgbm_test, by = c('order_id', 'product_id'), how = 'outer')
+rm(lgbm_test, arbo_test)
+
+expmean <- function(x,y) exp(mean(c(log(x),log(y))))
+max2 <- function(x,y) ifelse(x>y, x, y)
+pl <- function(x,y) (0.9*x+0.1*y)*1.01
+
+ex_test["prob"] <- mapply(pl, ex_test$prediction.x, ex_test$prediction.y)
+ex_test <- ex_test %>% select(order_id, product_id, prob)
+colnames(lgbm_test)<-c('X','order_id', 'prob','product_id')
+lgbm_test <- lgbm_test %>% select(order_id, product_id, prob)
+colnames(ex_test)<-c('order_id', 'product_id', 'prob')
 test<-ex_test
 rm(ex_test)
 

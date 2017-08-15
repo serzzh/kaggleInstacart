@@ -25,9 +25,9 @@ add_metrics <- function(df){
 ## Apply threshold
 apply_threshold <- function(df){
         df <- data.table(df)[order(order_id,-prob),]
-        print (dim(df))
-        df <- df %>% filter(prob>0.01)
-        print (dim(df))
+        #print (dim(df))
+        #df <- df %>% filter(prob>0.01)
+        #print (dim(df))
         max_ns <- df %>%
                 select(order_id,prob) %>%
                 group_by(order_id) %>%
